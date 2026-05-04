@@ -2339,6 +2339,11 @@
 }
 
 .h-cmd {
+  position: fixed !important;
+  top: 12vh;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 101 !important;
   width: min(700px, 92vw);
   max-height: 72vh;
   overflow: hidden;
@@ -2346,8 +2351,10 @@
   flex-direction: column;
   border: 1px solid color-mix(in oklab, var(--border), white 12%);
   border-radius: 18px;
-  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-2), white 7%), color-mix(in oklab, var(--bg-2), black 3%));
-  box-shadow: 0 34px 90px rgba(0,0,0,0.58), inset 0 1px 0 rgba(255,255,255,0.045);
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-2), white 7%), color-mix(in oklab, var(--bg-2), black 3%)),
+    var(--bg);
+  box-shadow: 0 34px 90px rgba(0,0,0,0.72), inset 0 1px 0 rgba(255,255,255,0.045);
 }
 
 .h-cmd-inputbar {
