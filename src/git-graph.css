@@ -2340,9 +2340,14 @@
 
 .h-cmd {
   position: fixed !important;
-  top: 12vh;
+  /* True viewport-center: top/left at 50% with the centering offsets
+     baked into `transform`. The shared `pc-slide-down-in` keyframe
+     animates `transform` to `none`, which would un-center mid-flight,
+     so we override the animation below with `h-cmd-center-in` that
+     keeps the centering transform across the keyframes. */
+  top: 50%;
   left: 50%;
-  translate: -50% 0;
+  transform: translate(-50%, -50%);
   z-index: 101 !important;
   width: min(700px, 92vw);
   max-height: 72vh;
@@ -2355,6 +2360,26 @@
     linear-gradient(180deg, color-mix(in oklab, var(--bg-2), white 7%), color-mix(in oklab, var(--bg-2), black 3%)),
     var(--bg);
   box-shadow: 0 34px 90px rgba(0,0,0,0.72), inset 0 1px 0 rgba(255,255,255,0.045);
+}
+
+/* Centering-preserving open/close keyframes for the command palette.
+   The shared `pc-slide-down-in` ends at `transform: none` which would
+   wipe the `translate(-50%, -50%)` centering once the animation runs.
+   These `h-cmd-center-*` variants keep `translate(-50%, -50%)` in every
+   keyframe so the dialog stays centered the whole time. */
+@keyframes h-cmd-center-in {
+  from { opacity: 0; transform: translate(-50%, calc(-50% - 10px)) scale(0.985); }
+  to   { opacity: 1; transform: translate(-50%, -50%); }
+}
+@keyframes h-cmd-center-out {
+  from { opacity: 1; transform: translate(-50%, -50%); }
+  to   { opacity: 0; transform: translate(-50%, calc(-50% - 10px)) scale(0.985); }
+}
+.h-cmd[data-anim="slide-down"][data-state="open"] {
+  animation: h-cmd-center-in var(--dur-normal) var(--ease-out) !important;
+}
+.h-cmd[data-anim="slide-down"][data-state="closed"] {
+  animation: h-cmd-center-out var(--dur-fast) var(--ease-in) !important;
 }
 
 .h-cmd-inputbar {
