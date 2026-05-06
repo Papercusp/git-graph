@@ -4934,7 +4934,7 @@
    Scope: standalone /harness only. /papercup uses iframe-bounded sizing
    (see .papercup-route .h-root above) and would scroll-overflow under this
    1260px floor, so we exclude it here. */
-.h-root:has([data-harness-inbox]):not(.papercup-route .h-root) {
+.h-root:has(.h-main-shell.dashboard [data-harness-inbox]):not(.papercup-route .h-root) {
   height: auto;
   min-height: max(calc(100vh - var(--app-nav-height, 49px)), 1260px);
 }
