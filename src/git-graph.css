@@ -4259,11 +4259,16 @@
    useful, just like the Papercup embed override above. */
 .h-root:has(.h-proposals-panel) {
   height: auto;
-  min-height: max(calc(100vh - var(--app-nav-height, 49px)), 1040px);
+  min-height: max(calc(100vh - var(--app-nav-height, 49px)), 1260px); /* match dashboard floor */
 }
 .h-main-shell.embed:has(.h-proposals-panel) {
+  /* Floor at 760px so smaller viewports stay usable; remove the max
+   * cap so the shell fills the available height. NOTE: :has() matches
+   * even when the proposals tab is in a hidden <Activity> Subtree, so
+   * this rule applies to *every* embed tab in the harness. The
+   * max-height was therefore capping summary, experts, config, etc.
+   * to 760px even though the user was on a different tab. */
   min-height: 760px;
-  max-height: 760px;
 }
 
 /* ── Proposals tab: dense product-review workbench ───────────────
@@ -6391,16 +6396,20 @@
   }
 }
 
-/* Git main workspace tab + starred commit workflow. */
+/* Git main workspace tab + starred commit workflow.
+ * Same shape as dashboard + brainstorm: shell fills the available
+ * height, panel fills inside it. Same caveat as proposals above —
+ * the git-panel may be in a hidden <Activity> subtree, so the
+ * shell rule applies cross-tab. Removing the max-cap. */
 .h-main-shell.embed:has(.h-git-panel) {
   min-height: 760px;
-  max-height: 760px;
 }
 .h-main-shell.embed .h-git-panel {
   width: 100%;
-  height: 760px;
+  flex: 1;
+  height: auto;
   min-height: 760px;
-  max-height: 760px;
+  max-height: none;
 }
 .h-git-filter-row {
   grid-template-columns: repeat(4, minmax(0, 1fr));
