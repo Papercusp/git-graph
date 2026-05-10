@@ -47,7 +47,24 @@ export function fetchGitLog(scope: string, limit: number, url: string): Promise<
     .then((r) => r.json())
     .then((d) => {
       if (d.error) throw new Error(d.error);
-      const commits = (d.commits ?? []) as Commit[];
+      // Defensive normalize: older / drifted backends have shipped `refs`
+      // as a comma-separated string instead of `string[]`. Crashing the
+      // GitGraphPanel on that shape (string.slice().map is not a function)
+      // takes down the whole harness page; coerce here once so every
+      // consumer gets a clean array.
+      const commits = ((d.commits ?? []) as Commit[]).map((c) => ({
+        ...c,
+        refs: Array.isArray(c.refs)
+          ? c.refs
+          : (typeof (c as { refs?: unknown }).refs === 'string'
+              ? ((c as unknown as { refs: string }).refs.split(',').map((r) => r.trim()).filter(Boolean))
+              : []),
+        parents: Array.isArray(c.parents)
+          ? c.parents
+          : (typeof (c as { parents?: unknown }).parents === 'string'
+              ? ((c as unknown as { parents: string }).parents.split(' ').filter(Boolean))
+              : []),
+      }));
       cache.set(k, { data: commits, ts: Date.now() });
       writeStorage(scope, limit, commits);
       return commits;
