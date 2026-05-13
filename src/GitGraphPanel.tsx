@@ -223,7 +223,6 @@ export default function GitGraphPanel({
 
   const laidOut = useMemo(() => (commits ? assignLanes(commits) : []), [commits]);
   const laneCount = useMemo(() => Math.max(1, laidOut.reduce((max, commit) => Math.max(max, commit.lane + 1), 1)), [laidOut]);
-  const latest = laidOut[0];
   const mergeCount = useMemo(() => laidOut.filter((commit) => commit.parents.length > 1).length, [laidOut]);
   const refCommits = useMemo(() => laidOut.filter((commit) => commit.refs.length > 0), [laidOut]);
   const uniqueRefs = useMemo(() => {
@@ -331,13 +330,6 @@ export default function GitGraphPanel({
             <GitFilterButton id="merges" label="Merges" count={mergeCount} filter={filter} setFilter={setFilter} />
             <GitFilterButton id="bookmarked" label="Stars" count={bookmarked.size} filter={filter} setFilter={setFilter} />
           </div>
-        </div>
-
-        <div className="h-git-summary" aria-label="Git history summary">
-          <span><b>{filteredCommits.length}</b> shown</span>
-          <span><b>{uniqueRefs.length}</b> ref{uniqueRefs.length === 1 ? '' : 's'}</span>
-          <span><b>{latest ? formatAge(latest.ts) : '—'}</b> latest</span>
-          <span><b>{bookmarked.size}</b> star{bookmarked.size === 1 ? '' : 's'}</span>
         </div>
 
         {uniqueRefs.length > 0 && (
