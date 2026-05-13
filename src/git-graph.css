@@ -6158,6 +6158,21 @@
   color: var(--fg-dim);
   font-size: 12px;
 }
+.h-git-detail-truncated {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in oklab, var(--warn, #d6a420), transparent 60%);
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--warn, #d6a420), transparent 88%);
+  color: var(--fg);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.h-git-detail-truncated a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
 .h-git-file-card {
   margin-bottom: 14px;
   overflow: hidden;

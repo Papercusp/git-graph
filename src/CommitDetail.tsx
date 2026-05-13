@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued';
 
@@ -13,6 +13,7 @@ interface CommitMeta {
   subject: string;
   body: string;
   patch: string;
+  patchTruncated?: boolean;
 }
 
 interface HunkFile {
@@ -96,21 +97,28 @@ export function CommitDetail({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Keep the URL builder in a ref so this effect only re-runs when the
+  // SHA changes. Callers pass an inline arrow each render (stable behavior,
+  // unstable identity), and depending on it caused an infinite fetch loop.
+  const showCommitUrlRef = useRef(showCommitUrl);
+  showCommitUrlRef.current = showCommitUrl;
+
   useEffect(() => {
     let aborted = false;
+    const ctrl = new AbortController();
     setMeta(null);
     setError(null);
     setCopied(false);
-    fetch(showCommitUrl(sha))
+    fetch(showCommitUrlRef.current(sha), { signal: ctrl.signal })
       .then((r) => r.json())
       .then((d) => {
         if (aborted) return;
         if (d.error) setError(d.error);
         else setMeta(d);
       })
-      .catch((e) => { if (!aborted) setError(String(e)); });
-    return () => { aborted = true; };
-  }, [sha, showCommitUrl]);
+      .catch((e) => { if (!aborted && e?.name !== 'AbortError') setError(String(e)); });
+    return () => { aborted = true; ctrl.abort(); };
+  }, [sha]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -200,6 +208,17 @@ export function CommitDetail({
           <div className="h-git-detail-body">
             {meta.body && (
               <pre className="h-git-detail-message">{meta.body}</pre>
+            )}
+            {meta.patchTruncated && (
+              <div className="h-git-detail-truncated" role="status">
+                This commit's diff is too large to render in full. Showing the first ~8&nbsp;MB; later files may be missing.
+                {remoteCommitUrl && (
+                  <>
+                    {' '}
+                    <a href={remoteCommitUrl(displaySha)} target="_blank" rel="noreferrer">Open full commit ↗</a>
+                  </>
+                )}
+              </div>
             )}
             {files.length === 0 && !error && (
               <div className="h-git-detail-empty">(no diff — merge or empty commit)</div>
