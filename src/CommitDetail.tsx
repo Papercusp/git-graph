@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Loader2, ChevronRight, ChevronDown } from 'lucide-react';
 import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued';
 
@@ -266,7 +267,7 @@ export function CommitDetail({
     }
   };
 
-  return (
+  const overlay = (
     <div
       role="dialog"
       aria-modal="true"
@@ -418,4 +419,12 @@ export function CommitDetail({
       </section>
     </div>
   );
+
+  // Portal to <body> so the overlay's `position: fixed; inset: 0` is
+  // viewport-relative. Ancestors of the git panel (resizable-panels,
+  // animation wrappers) apply CSS transforms which establish a
+  // containing block for fixed positioning — without the portal, the
+  // overlay gets visually trapped inside the small git panel.
+  if (typeof document === 'undefined') return overlay;
+  return createPortal(overlay, document.body);
 }
