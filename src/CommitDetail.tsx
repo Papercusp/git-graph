@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Loader2, ChevronRight, ChevronDown } from 'lucide-react';
 import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued';
@@ -164,16 +164,14 @@ export function CommitDetail({
   // infinite abort/refetch loop and left the UI stuck on "loading diff…".
   const fetchUrl = showCommitUrl(sha);
 
-  // mountedRef survives React 19 strict-mode double-mount: per-effect
-  // `aborted` flags race with cleanup vs in-flight fetch and silently
-  // discard the response when cleanup runs between fetch start and
-  // response. Only flip on real unmount.
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
-
+  // Always apply the fetch result. We previously guarded with an
+  // `aborted` flag, then `mountedRef`, then generation counters — every
+  // approach had a race where React 19 strict-mode dev's double-mount
+  // (and HMR's component re-mounts) left the modal stuck on "loading
+  // diff…" because the guard flipped before the response landed.
+  // Setting state on an unmounted component is a dev warning, not an
+  // error; harmless here. The fetchUrl includes the sha so each click
+  // queues a new fetch and the last one wins.
   useEffect(() => {
     setMeta(null);
     setError(null);
@@ -182,11 +180,10 @@ export function CommitDetail({
     fetch(fetchUrl)
       .then((r) => r.json())
       .then((d) => {
-        if (!mountedRef.current) return;
         if (d.error) setError(d.error);
         else setMeta(d);
       })
-      .catch((e) => { if (mountedRef.current) setError(String(e)); });
+      .catch((e) => setError(String(e)));
   }, [fetchUrl]);
 
   // Parse the patch off the synchronous render path. For multi-MB patches
@@ -198,10 +195,8 @@ export function CommitDetail({
     setFiles(null);
     setExpanded({});
     const id = setTimeout(() => {
-      if (!mountedRef.current) return;
       try {
         const parsed = splitDiff(meta.patch);
-        if (!mountedRef.current) return;
         setFiles(parsed);
         const initial: Record<number, boolean> = {};
         for (let i = 0; i < Math.min(parsed.length, MAX_FILES_RENDERED); i++) {
@@ -211,7 +206,7 @@ export function CommitDetail({
         }
         setExpanded(initial);
       } catch (e) {
-        if (mountedRef.current) setError(`diff parse failed: ${String(e)}`);
+        setError(`diff parse failed: ${String(e)}`);
       }
     }, 0);
     return () => { clearTimeout(id); };
