@@ -6234,171 +6234,27 @@
   margin-bottom: 10px;
 }
 
-/* Worktree sub-section (above commit list). */
-.h-git-worktree-section {
-  display: flex;
-  flex-direction: column;
-  margin: 6px 8px 4px;
-  border: 1px solid color-mix(in oklab, var(--border), transparent 18%);
-  border-radius: 8px;
-  background: color-mix(in oklab, var(--bg-2), transparent 12%);
-}
-.h-git-worktree-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 6px 9px;
+.h-git-worktree-filter {
+  max-width: 180px;
+  min-height: 26px;
+  padding: 0 6px;
   color: var(--fg);
-  background: transparent;
-  border: none;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-align: left;
-  cursor: pointer;
-}
-.h-git-worktree-head:hover {
-  background: color-mix(in oklab, var(--bg-3), transparent 30%);
-}
-.h-git-worktree-count {
-  margin-left: 2px;
-  padding: 1px 6px;
-  color: var(--fg-dim);
-  background: color-mix(in oklab, var(--bg-3), transparent 10%);
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-}
-.h-git-worktree-spin {
-  margin-left: 4px;
-  animation: spin 1s linear infinite;
-  color: var(--fg-dim);
-}
-.h-git-worktree-body {
-  padding: 4px 9px 9px;
-  border-top: 1px solid color-mix(in oklab, var(--border), transparent 32%);
-}
-.h-git-worktree-empty {
-  padding: 8px 4px;
-  color: var(--fg-dim);
-  font-size: 11px;
-}
-.h-git-worktree-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.h-git-worktree-row {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px 7px;
-  border: 1px solid color-mix(in oklab, var(--border), transparent 40%);
+  border: 1px solid color-mix(in oklab, var(--border), white 6%);
   border-radius: 6px;
-  background: color-mix(in oklab, var(--bg), transparent 20%);
-}
-.h-git-worktree-pathline {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-}
-.h-git-worktree-icon {
-  flex: 0 0 auto;
-  color: var(--fg-dim);
-}
-.h-git-worktree-path {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--fg);
+  background: color-mix(in oklab, var(--bg-3), transparent 12%);
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 11px;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  overflow: hidden;
-  cursor: pointer;
 }
-.h-git-worktree-path:hover {
-  color: color-mix(in oklab, var(--accent), white 12%);
-  text-decoration: underline;
+.h-git-worktree-filter:hover,
+.h-git-worktree-filter:focus-visible {
+  border-color: color-mix(in oklab, var(--accent), transparent 40%);
+  outline: none;
 }
-.h-git-worktree-copyhint {
-  color: var(--fg-faint);
-  opacity: 0.6;
-  flex: 0 0 auto;
-}
-.h-git-worktree-copied {
-  color: var(--good);
-  flex: 0 0 auto;
-}
-.h-git-worktree-badges {
-  display: flex;
-  gap: 4px;
-  flex: 0 0 auto;
-  margin-left: 4px;
-}
-.h-git-worktree-badge {
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: color-mix(in oklab, var(--bg-3), transparent 0%);
-  color: var(--fg-dim);
-  border: 1px solid color-mix(in oklab, var(--border), transparent 30%);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.h-git-worktree-badge--main {
-  color: var(--fg);
-  border-color: color-mix(in oklab, var(--accent), transparent 50%);
-  background: color-mix(in oklab, var(--accent), transparent 86%);
-}
-.h-git-worktree-badge--warn {
-  color: var(--warn, #d6a420);
-  border-color: color-mix(in oklab, var(--warn, #d6a420), transparent 50%);
-  background: color-mix(in oklab, var(--warn, #d6a420), transparent 86%);
-}
-.h-git-worktree-badge--bad {
-  color: var(--bad);
-  border-color: color-mix(in oklab, var(--bad), transparent 50%);
-  background: color-mix(in oklab, var(--bad), transparent 86%);
-}
-.h-git-worktree-meta {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding-left: 18px;
-  color: var(--fg-dim);
-  font-size: 10.5px;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-}
-.h-git-worktree-branch {
-  color: var(--fg);
-}
-.h-git-worktree-sha {
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: color-mix(in oklab, var(--accent), white 14%);
-  font: inherit;
-  cursor: pointer;
-}
-button.h-git-worktree-sha:hover {
-  text-decoration: underline;
-}
-.h-git-worktree-ts {
-  color: var(--fg-faint);
-}
+
 @media (max-width: 760px) {
+  .h-git-worktree-filter {
+    max-width: 140px;
+  }
   .h-git-detail-drawer {
     width: 100vw;
   }

@@ -8,29 +8,34 @@ interface Entry {
 
 const cache = new Map<string, Entry>();
 
-function cacheKey(scope: string, limit: number) { return `${scope}:${limit}`; }
-function storageKey(scope: string, limit: number) { return `gitlog.${scope}.${limit}`; }
+function cacheKey(scope: string, limit: number, ref: string | null) {
+  return `${scope}:${limit}:${ref ?? '*'}`;
+}
+function storageKey(scope: string, limit: number, ref: string | null) {
+  return `gitlog.${scope}.${limit}.${(ref ?? '_all').replace(/[^A-Za-z0-9._-]/g, '_')}`;
+}
 
-function readStorage(scope: string, limit: number): Commit[] | null {
+function readStorage(scope: string, limit: number, ref: string | null): Commit[] | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = window.localStorage.getItem(storageKey(scope, limit));
+    const raw = window.localStorage.getItem(storageKey(scope, limit, ref));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Commit[];
     return Array.isArray(parsed) ? parsed : null;
   } catch { return null; }
 }
 
-function writeStorage(scope: string, limit: number, commits: Commit[]) {
+function writeStorage(scope: string, limit: number, ref: string | null, commits: Commit[]) {
   if (typeof window === 'undefined') return;
-  try { window.localStorage.setItem(storageKey(scope, limit), JSON.stringify(commits)); } catch {}
+  try { window.localStorage.setItem(storageKey(scope, limit, ref), JSON.stringify(commits)); } catch {}
 }
 
-export function getCachedGitLog(scope: string, limit: number): Commit[] | null {
-  const hit = cache.get(cacheKey(scope, limit))?.data;
+export function getCachedGitLog(scope: string, limit: number, ref: string | null = null): Commit[] | null {
+  const k = cacheKey(scope, limit, ref);
+  const hit = cache.get(k)?.data;
   if (hit) return hit;
-  const persisted = readStorage(scope, limit);
-  if (persisted) cache.set(cacheKey(scope, limit), { data: persisted, ts: 0 });
+  const persisted = readStorage(scope, limit, ref);
+  if (persisted) cache.set(k, { data: persisted, ts: 0 });
   return persisted;
 }
 
@@ -38,8 +43,13 @@ export function getCachedGitLog(scope: string, limit: number): Commit[] | null {
  * Fetch git log via the provided URL. The response must shape `{ commits: Commit[] }`
  * or `{ error: string }`.
  */
-export function fetchGitLog(scope: string, limit: number, url: string): Promise<Commit[]> {
-  const k = cacheKey(scope, limit);
+export function fetchGitLog(
+  scope: string,
+  limit: number,
+  url: string,
+  ref: string | null = null,
+): Promise<Commit[]> {
+  const k = cacheKey(scope, limit, ref);
   const existing = cache.get(k);
   if (existing?.inFlight) return existing.inFlight;
 
@@ -66,7 +76,7 @@ export function fetchGitLog(scope: string, limit: number, url: string): Promise<
               : []),
       }));
       cache.set(k, { data: commits, ts: Date.now() });
-      writeStorage(scope, limit, commits);
+      writeStorage(scope, limit, ref, commits);
       return commits;
     })
     .catch((e) => {
@@ -79,6 +89,6 @@ export function fetchGitLog(scope: string, limit: number, url: string): Promise<
   return p;
 }
 
-export function preloadGitLog(scope: string, limit: number, url: string) {
-  fetchGitLog(scope, limit, url).catch(() => {});
+export function preloadGitLog(scope: string, limit: number, url: string, ref: string | null = null) {
+  fetchGitLog(scope, limit, url, ref).catch(() => {});
 }

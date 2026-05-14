@@ -4,8 +4,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { assignLanes, laneColor, type Commit, type LaidOutCommit } from './graphLayout';
 import { CommitDetail } from './CommitDetail';
-import { WorktreeList } from './WorktreeList';
 import { fetchGitLog, getCachedGitLog } from './cache';
+
+export interface Worktree {
+  path: string;
+  head: string;
+  branch: string | null;
+  bare: boolean;
+  detached: boolean;
+  locked: boolean;
+  lockedReason: string | null;
+  prunable: boolean;
+  prunableReason: string | null;
+  isMain: boolean;
+  lastCommitTs: number | null;
+}
 import './git-graph.css';
 
 const LIMITS = [100, 300, 500, 1000] as const;
@@ -161,8 +174,8 @@ function GitCommitRow({
 export interface GitGraphPanelProps {
   /** Stable cache + bookmark key (e.g. `harness:sheets`, `restart-main`). */
   scope: string;
-  /** Build the URL for fetching git log. Receives `limit` (count). */
-  gitLogUrl: (limit: number) => string;
+  /** Build the URL for fetching git log. `ref` is null for all worktrees, or a branch name / sha. */
+  gitLogUrl: (limit: number, ref: string | null) => string;
   /** Build the URL for fetching one commit's diff/patch detail. */
   showCommitUrl: (sha: string) => string;
   /** Optional builder for an external commit-view link (e.g. github.com/.../commit/SHA). */
@@ -171,8 +184,16 @@ export interface GitGraphPanelProps {
   title?: string;
   /** Optional: poll interval in ms; if set, refetch every N ms. */
   pollIntervalMs?: number;
-  /** Optional: when set, renders a collapsible worktrees sub-section above the commit graph. */
+  /**
+   * Optional: when set, adds a worktree filter dropdown to the toolbar.
+   * Selecting an entry filters the commit graph to that worktree's branch
+   * (or sha for detached worktrees). When unset, the log spans all refs.
+   */
   worktreesUrl?: () => string;
+  /** Optional controlled value for the worktree filter ('' / null = all). */
+  worktree?: string | null;
+  /** Optional change handler; pairs with `worktree` for controlled mode. */
+  onWorktreeChange?: (next: string | null) => void;
 }
 
 export default function GitGraphPanel({
@@ -183,9 +204,19 @@ export default function GitGraphPanel({
   title,
   pollIntervalMs,
   worktreesUrl,
+  worktree: worktreeControlled,
+  onWorktreeChange,
 }: GitGraphPanelProps) {
   const [limit, setLimit] = useState<number>(300);
-  const [commits, setCommits] = useState<Commit[] | null>(() => getCachedGitLog(scope, 300));
+  const [worktreeInternal, setWorktreeInternal] = useState<string | null>(null);
+  const isControlled = worktreeControlled !== undefined;
+  const worktree = isControlled ? (worktreeControlled ?? null) : worktreeInternal;
+  const setWorktree = (next: string | null) => {
+    if (!isControlled) setWorktreeInternal(next);
+    onWorktreeChange?.(next);
+  };
+  const [worktrees, setWorktrees] = useState<Worktree[] | null>(null);
+  const [commits, setCommits] = useState<Commit[] | null>(() => getCachedGitLog(scope, 300, worktree));
   const [error, setError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
   const [selectedSha, setSelectedSha] = useState<string | null>(null);
@@ -196,18 +227,33 @@ export default function GitGraphPanel({
 
   // Resolve to a string for stable effect deps — see CommitDetail for the
   // full rationale. Inline arrow props change identity on every parent render.
-  const logFetchUrl = gitLogUrl(limit);
+  const logFetchUrl = gitLogUrl(limit, worktree);
+
+  // Fetch worktrees once (and on poll) for the dropdown. Empty list when
+  // worktreesUrl isn't provided — dropdown is hidden in that case.
+  const worktreesEndpoint = worktreesUrl?.();
+  useEffect(() => {
+    if (!worktreesEndpoint) return;
+    let stop = false;
+    const load = () => {
+      fetch(worktreesEndpoint)
+        .then((r) => r.json())
+        .then((d) => { if (!stop && Array.isArray(d?.worktrees)) setWorktrees(d.worktrees); })
+        .catch(() => {/* ignore — dropdown stays empty / loading */});
+    };
+    load();
+    const t = setInterval(load, 30_000);
+    return () => { stop = true; clearInterval(t); };
+  }, [worktreesEndpoint]);
 
   useEffect(() => {
-    let aborted = false;
-    const cached = getCachedGitLog(scope, limit);
+    const cached = getCachedGitLog(scope, limit, worktree);
     setCommits(cached);
     setError(null);
-    fetchGitLog(scope, limit, logFetchUrl)
-      .then((c) => { if (!aborted) setCommits(c); })
-      .catch((e) => { if (!aborted) setError(String(e?.message ?? e)); });
-    return () => { aborted = true; };
-  }, [scope, limit, reloadTick, logFetchUrl]);
+    fetchGitLog(scope, limit, logFetchUrl, worktree)
+      .then((c) => setCommits(c))
+      .catch((e) => setError(String(e?.message ?? e)));
+  }, [scope, limit, reloadTick, logFetchUrl, worktree]);
 
   useEffect(() => {
     setBookmarked(readBookmarks(scope));
@@ -299,6 +345,27 @@ export default function GitGraphPanel({
             <span className="h-panel-count">{filteredCommits.length}/{commits?.length ?? 0} visible</span>
           </div>
           <div className="h-panel-actions h-git-actions">
+            {worktreesEndpoint && (
+              <select
+                className="h-git-worktree-filter"
+                value={worktree ?? ''}
+                onChange={(e) => setWorktree(e.target.value || null)}
+                title="filter commits by worktree"
+                aria-label="Filter commits by worktree"
+              >
+                <option value="">All worktrees{worktrees ? ` (${worktrees.length})` : ''}</option>
+                {worktrees?.map((w) => {
+                  const value = w.branch ?? (w.head ? `sha:${w.head}` : '');
+                  if (!value) return null;
+                  const optValue = w.branch ?? w.head;
+                  const label = (w.branch ?? `${w.head?.slice(0, 8)} (detached)`)
+                    + (w.isMain ? ' ★' : '')
+                    + (w.locked ? ' 🔒' : '')
+                    + (w.prunable ? ' ⚠' : '');
+                  return <option key={w.path} value={optValue}>{label}</option>;
+                })}
+              </select>
+            )}
             <select
               className="h-git-limit"
               value={limit}
@@ -365,14 +432,6 @@ export default function GitGraphPanel({
               </button>
             ))}
           </div>
-        )}
-
-        {worktreesUrl && (
-          <WorktreeList
-            worktreesUrl={worktreesUrl}
-            showCommitUrl={showCommitUrl}
-            onPickCommit={selectCommit}
-          />
         )}
 
         {error && <div className="h-empty h-git-error">{error}</div>}
