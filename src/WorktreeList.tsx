@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Loader2, Folder, Copy, Check } from 'lucide-react';
 
 export interface Worktree {
@@ -78,22 +78,26 @@ export function WorktreeList({
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
 
   const url = worktreesUrl();
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
-    let aborted = false;
     const load = () => {
       fetch(url)
         .then((r) => r.json())
         .then((d: WorktreesResponse) => {
-          if (aborted) return;
+          if (!mountedRef.current) return;
           if (d.error) setError(d.error);
           else { setData(d); setError(null); }
         })
-        .catch((e) => { if (!aborted) setError(String(e?.message ?? e)); });
+        .catch((e) => { if (mountedRef.current) setError(String(e?.message ?? e)); });
     };
     load();
     const t = pollIntervalMs > 0 ? setInterval(load, pollIntervalMs) : null;
-    return () => { aborted = true; if (t) clearInterval(t); };
+    return () => { if (t) clearInterval(t); };
   }, [url, pollIntervalMs]);
 
   const worktrees = data?.worktrees ?? null;
