@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, Loader2, Folder, Copy, Check } from 'lucide-react';
 
 export interface Worktree {
@@ -78,22 +78,22 @@ export function WorktreeList({
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
 
   const url = worktreesUrl();
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
 
+  // Always apply the fetch result. Guards (aborted flag, mountedRef,
+  // generation counter) all race against React 19 strict-mode and HMR
+  // re-mounts under a slow dev server: the cleanup flips the flag
+  // before the 15s+ response lands and the data is silently dropped,
+  // leaving the count at 0. Stale-state-on-unmount is a harmless dev
+  // warning — last fetch wins.
   useEffect(() => {
     const load = () => {
       fetch(url)
         .then((r) => r.json())
         .then((d: WorktreesResponse) => {
-          if (!mountedRef.current) return;
           if (d.error) setError(d.error);
           else { setData(d); setError(null); }
         })
-        .catch((e) => { if (mountedRef.current) setError(String(e?.message ?? e)); });
+        .catch((e) => setError(String(e?.message ?? e)));
     };
     load();
     const t = pollIntervalMs > 0 ? setInterval(load, pollIntervalMs) : null;
