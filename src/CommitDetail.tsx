@@ -177,13 +177,28 @@ export function CommitDetail({
     setError(null);
     setFiles(null);
     setCopied(false);
-    fetch(fetchUrl)
-      .then((r) => r.json())
+    // Bound the fetch — the route can hang when PG is unreachable or the
+    // dev server is mid-compile; without this the modal sits on
+    // "loading diff…" forever. 30s gives big patches room while still
+    // surfacing real hangs (the server itself caps git show at 30s, so
+    // 30s here is the right matching ceiling).
+    fetch(fetchUrl, { signal: AbortSignal.timeout(30_000) })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((d) => {
         if (d.error) setError(d.error);
         else setMeta(d);
       })
-      .catch((e) => setError(String(e)));
+      .catch((e) => {
+        const name = (e as Error).name;
+        if (name === 'TimeoutError' || name === 'AbortError') {
+          setError('Server took >30s to respond. PG may be unreachable or the dev server is mid-compile.');
+        } else {
+          setError(String(e));
+        }
+      });
   }, [fetchUrl]);
 
   // Parse the patch off the synchronous render path. For multi-MB patches
