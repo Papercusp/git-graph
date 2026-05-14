@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { assignLanes, laneColor, type Commit, type LaidOutCommit } from './graphLayout';
 import { CommitDetail } from './CommitDetail';
+import { WorktreeList } from './WorktreeList';
 import { fetchGitLog, getCachedGitLog } from './cache';
 import './git-graph.css';
 
@@ -170,6 +171,8 @@ export interface GitGraphPanelProps {
   title?: string;
   /** Optional: poll interval in ms; if set, refetch every N ms. */
   pollIntervalMs?: number;
+  /** Optional: when set, renders a collapsible worktrees sub-section above the commit graph. */
+  worktreesUrl?: () => string;
 }
 
 export default function GitGraphPanel({
@@ -179,6 +182,7 @@ export default function GitGraphPanel({
   remoteCommitUrl,
   title,
   pollIntervalMs,
+  worktreesUrl,
 }: GitGraphPanelProps) {
   const [limit, setLimit] = useState<number>(300);
   const [commits, setCommits] = useState<Commit[] | null>(() => getCachedGitLog(scope, 300));
@@ -190,16 +194,20 @@ export default function GitGraphPanel({
   const [bookmarked, setBookmarked] = useState<Set<string>>(() => readBookmarks(scope));
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Resolve to a string for stable effect deps — see CommitDetail for the
+  // full rationale. Inline arrow props change identity on every parent render.
+  const logFetchUrl = gitLogUrl(limit);
+
   useEffect(() => {
     let aborted = false;
     const cached = getCachedGitLog(scope, limit);
     setCommits(cached);
     setError(null);
-    fetchGitLog(scope, limit, gitLogUrl(limit))
+    fetchGitLog(scope, limit, logFetchUrl)
       .then((c) => { if (!aborted) setCommits(c); })
       .catch((e) => { if (!aborted) setError(String(e?.message ?? e)); });
     return () => { aborted = true; };
-  }, [scope, limit, reloadTick, gitLogUrl]);
+  }, [scope, limit, reloadTick, logFetchUrl]);
 
   useEffect(() => {
     setBookmarked(readBookmarks(scope));
@@ -357,6 +365,14 @@ export default function GitGraphPanel({
               </button>
             ))}
           </div>
+        )}
+
+        {worktreesUrl && (
+          <WorktreeList
+            worktreesUrl={worktreesUrl}
+            showCommitUrl={showCommitUrl}
+            onPickCommit={selectCommit}
+          />
         )}
 
         {error && <div className="h-empty h-git-error">{error}</div>}
