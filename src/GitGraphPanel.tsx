@@ -173,8 +173,6 @@ export interface GitGraphPanelProps {
   pollIntervalMs?: number;
   /** Optional: when set, renders a collapsible worktrees sub-section above the commit graph. */
   worktreesUrl?: () => string;
-  /** Optional: when set, clicking a commit calls this with the sha (typically to navigate to a dedicated page) instead of opening the drawer. */
-  onCommitHref?: (sha: string) => string;
 }
 
 export default function GitGraphPanel({
@@ -185,7 +183,6 @@ export default function GitGraphPanel({
   title,
   pollIntervalMs,
   worktreesUrl,
-  onCommitHref,
 }: GitGraphPanelProps) {
   const [limit, setLimit] = useState<number>(300);
   const [commits, setCommits] = useState<Commit[] | null>(() => getCachedGitLog(scope, 300));
@@ -269,12 +266,8 @@ export default function GitGraphPanel({
   };
 
   const selectCommit = useCallback((sha: string) => {
-    if (onCommitHref) {
-      window.location.assign(onCommitHref(sha));
-      return;
-    }
     setSelectedSha(sha);
-  }, [onCommitHref]);
+  }, []);
 
   const applyQuery = useCallback((next: string) => {
     setQuery(next);

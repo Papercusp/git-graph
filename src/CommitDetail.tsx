@@ -142,7 +142,6 @@ export function CommitDetail({
   showCommitUrl,
   remoteCommitUrl,
   onClose,
-  layout = 'drawer',
 }: {
   sha: string;
   /** Function building the API URL for the commit detail (returns full diff/patch). */
@@ -150,8 +149,6 @@ export function CommitDetail({
   /** Optional builder for an external view URL (e.g. github.com/owner/repo/commit/SHA). */
   remoteCommitUrl?: (sha: string) => string;
   onClose: () => void;
-  /** 'drawer' = fixed overlay (default, used in panel); 'page' = inline full-width (used in dedicated route). */
-  layout?: 'drawer' | 'page';
 }) {
   const [meta, setMeta] = useState<CommitMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -269,12 +266,16 @@ export function CommitDetail({
     }
   };
 
-  const isPage = layout === 'page';
-  const sectionClass = isPage ? 'h-git-detail-page' : 'h-git-detail-drawer';
-  const sectionContent = (
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="h-git-detail-overlay"
+      onClick={onClose}
+    >
       <section
-        className={sectionClass}
-        onClick={isPage ? undefined : (e) => e.stopPropagation()}
+        className="h-git-detail-drawer"
+        onClick={(e) => e.stopPropagation()}
         aria-label="Commit diff"
       >
         <header className="h-git-detail-head">
@@ -415,17 +416,6 @@ export function CommitDetail({
           </div>
         )}
       </section>
-  );
-
-  if (isPage) return sectionContent;
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="h-git-detail-overlay"
-      onClick={onClose}
-    >
-      {sectionContent}
     </div>
   );
 }
