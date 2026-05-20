@@ -157,12 +157,22 @@ export function CommitDetail({
   /** Async-split state: gated so we can show "parsing diff…" while it's pending. */
   const [files, setFiles] = useState<HunkFile[] | null>(null);
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
+  // A commit whose every changed path is excluded by the server's default
+  // diff filter (.harness/**, lockfiles, snapshots) comes back with an empty
+  // patch. "Show full diff" refetches with ?full=1. Stored as the sha it was
+  // enabled for, so navigating to a different commit auto-resets it without
+  // needing a separate effect.
+  const [fullForSha, setFullForSha] = useState<string | null>(null);
+  const full = fullForSha === sha;
 
   // Resolve to a plain string so the effect doesn't re-run on every parent
   // render. Callers commonly pass an inline arrow `(sha) => `/api/.../${sha}``
   // whose identity changes each render — including it in deps caused an
   // infinite abort/refetch loop and left the UI stuck on "loading diff…".
-  const fetchUrl = showCommitUrl(sha);
+  const baseUrl = showCommitUrl(sha);
+  const fetchUrl = full
+    ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}full=1`
+    : baseUrl;
 
   // Always apply the fetch result. We previously guarded with an
   // `aborted` flag, then `mountedRef`, then generation counters — every
@@ -206,9 +216,19 @@ export function CommitDetail({
   // the "parsing diff…" frame paint instead of leaving the user stuck on
   // "loading diff…" while the main thread is busy.
   useEffect(() => {
-    if (!meta?.patch) return;
-    setFiles(null);
+    if (!meta) return;
     setExpanded({});
+    // An empty patch is a real, common state: a merge/empty commit, or — the
+    // usual case in harness repos — a commit whose every changed path is
+    // excluded by default (.harness/**, lockfiles, snapshots). The old guard
+    // `if (!meta?.patch) return` bailed *before* setFiles ran, so `files`
+    // stayed null and the modal hung on the loading state forever. Resolve
+    // to [] so the empty-state UI renders instead.
+    if (!meta.patch) {
+      setFiles([]);
+      return;
+    }
+    setFiles(null);
     const id = setTimeout(() => {
       try {
         const parsed = splitDiff(meta.patch);
@@ -225,7 +245,7 @@ export function CommitDetail({
       }
     }, 0);
     return () => { clearTimeout(id); };
-  }, [meta?.patch]);
+  }, [meta]);
 
   const toggleFile = useCallback((idx: number) => {
     setExpanded((prev) => ({ ...prev, [idx]: !prev[idx] }));
@@ -343,7 +363,29 @@ export function CommitDetail({
               <pre className="h-git-detail-message">{meta.body}</pre>
             )}
             {files.length === 0 && !error && (
-              <div className="h-git-detail-empty">(no diff — merge or empty commit)</div>
+              <div className="h-git-detail-empty">
+                {meta.parents.length > 1
+                  ? 'Merge commit — no combined diff to display.'
+                  : full
+                    ? 'Empty commit — no file changes.'
+                    : (
+                      <>
+                        <div>
+                          No diff to show — every path changed in this commit is
+                          excluded from the default view (.harness/**, lockfiles,
+                          snapshots, *.snap).
+                        </div>
+                        <button
+                          type="button"
+                          className="h-git-detail-copy"
+                          style={{ marginTop: 8 }}
+                          onClick={() => setFullForSha(sha)}
+                        >
+                          Show full diff
+                        </button>
+                      </>
+                    )}
+              </div>
             )}
             {filesToShow.length > 0 && (
               <div className="h-git-detail-toolbar">
