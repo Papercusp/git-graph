@@ -174,25 +174,25 @@ export function CommitDetail({
     ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}full=1`
     : baseUrl;
 
-  // Always apply the fetch result. We previously guarded with an
-  // `aborted` flag, then `mountedRef`, then generation counters — every
-  // approach had a race where React 19 strict-mode dev's double-mount
-  // (and HMR's component re-mounts) left the modal stuck on "loading
-  // diff…" because the guard flipped before the response landed.
-  // Setting state on an unmounted component is a dev warning, not an
-  // error; harmless here. The fetchUrl includes the sha so each click
-  // queues a new fetch and the last one wins.
+  // One fetch per commit, aborted on cleanup. React 19 strict-mode dev
+  // double-mounts this component (mount → unmount → mount); without an
+  // abort, BOTH mounts' fetches stay alive and hit the server — two
+  // identical git/show requests per click. Each effect run owns its own
+  // controller, so the live run's fetch is simply never aborted; only
+  // superseded runs are. No shared guard, so none of the races the old
+  // flag/mountedRef approaches hit.
   useEffect(() => {
     setMeta(null);
     setError(null);
     setFiles(null);
     setCopied(false);
+    const ctrl = new AbortController();
     // Bound the fetch — the route can hang when PG is unreachable or the
     // dev server is mid-compile; without this the modal sits on
     // "loading diff…" forever. 30s gives big patches room while still
-    // surfacing real hangs (the server itself caps git show at 30s, so
-    // 30s here is the right matching ceiling).
-    fetch(fetchUrl, { signal: AbortSignal.timeout(30_000) })
+    // surfacing real hangs (the server itself caps git show at 30s).
+    const signal = AbortSignal.any([ctrl.signal, AbortSignal.timeout(30_000)]);
+    fetch(fetchUrl, { signal })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -202,6 +202,9 @@ export function CommitDetail({
         else setMeta(d);
       })
       .catch((e) => {
+        // Superseded by a newer fetch (commit switch / unmount) — the
+        // live effect run owns the UI now; stay silent.
+        if (ctrl.signal.aborted) return;
         const name = (e as Error).name;
         if (name === 'TimeoutError' || name === 'AbortError') {
           setError('Server took >30s to respond. PG may be unreachable or the dev server is mid-compile.');
@@ -209,6 +212,7 @@ export function CommitDetail({
           setError(String(e));
         }
       });
+    return () => { ctrl.abort(); };
   }, [fetchUrl]);
 
   // Parse the patch off the synchronous render path. For multi-MB patches
