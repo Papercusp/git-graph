@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Loader2, ChevronRight, ChevronDown } from 'lucide-react';
 import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued';
+import { GitTooltip } from './GitTooltip';
 
 interface CommitMeta {
   sha: string;
@@ -341,9 +342,11 @@ export function CommitDetail({
             <button type="button" className="h-git-detail-copy" onClick={copySha}>
               {copied ? 'copied' : 'copy sha'}
             </button>
-            <button className="h-btn-icon" onClick={onClose} title="Close (esc)" aria-label="Close commit detail">
-              <X size={14} />
-            </button>
+            <GitTooltip label="Close (esc)">
+              <button className="h-btn-icon" onClick={onClose} aria-label="Close commit detail">
+                <X size={14} />
+              </button>
+            </GitTooltip>
           </div>
         </header>
 

@@ -13,6 +13,13 @@ vi.mock('react-diff-viewer-continued', () => ({
   DiffMethod: { LINES: 'LINES', WORDS: 'WORDS', CHARS: 'CHARS' },
 }));
 
+// GitTooltip wraps Radix Tooltip, which needs a TooltipProvider ancestor.
+// These tests render CommitDetail bare; the tooltip is irrelevant to the
+// fetch/parse/empty-state logic under test, so stub it to a passthrough.
+vi.mock('./GitTooltip', () => ({
+  GitTooltip: ({ children }: { children: unknown }) => children,
+}));
+
 const BASE = {
   sha: 'c39d799c41aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   author: 'Avi',

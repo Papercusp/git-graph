@@ -1,10 +1,48 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { RefreshCw, Check, ChevronDown } from 'lucide-react';
+import * as RS from '@radix-ui/react-select';
 import { assignLanes, laneColor, type Commit, type LaidOutCommit } from './graphLayout';
 import { CommitDetail } from './CommitDetail';
+import { GitTooltip } from './GitTooltip';
 import { fetchGitLog, getCachedGitLog } from './cache';
+
+interface GitSelectOption { value: string; label: ReactNode; }
+
+/** Local Radix Select wrapper. Mirrors apps/operator/app/harness/Select.tsx
+ *  so the git panel matches the canonical input/select look without
+ *  depending on the operator app. */
+function GitSelect({
+  value, onChange, options, ariaLabel, triggerClassName,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: GitSelectOption[];
+  ariaLabel?: string;
+  triggerClassName?: string;
+}) {
+  return (
+    <RS.Root value={value} onValueChange={onChange}>
+      <RS.Trigger aria-label={ariaLabel} className={triggerClassName ?? 'h-git-select-trigger'}>
+        <RS.Value />
+        <RS.Icon><ChevronDown size={11} /></RS.Icon>
+      </RS.Trigger>
+      <RS.Portal>
+        <RS.Content className="h-git-select-content" position="popper" sideOffset={4}>
+          <RS.Viewport>
+            {options.map((opt) => (
+              <RS.Item key={opt.value} value={opt.value} className="h-git-select-item">
+                <RS.ItemText>{opt.label}</RS.ItemText>
+                <RS.ItemIndicator><Check size={11} /></RS.ItemIndicator>
+              </RS.Item>
+            ))}
+          </RS.Viewport>
+        </RS.Content>
+      </RS.Portal>
+    </RS.Root>
+  );
+}
 
 export interface Worktree {
   path: string;
@@ -346,43 +384,41 @@ export default function GitGraphPanel({
           </div>
           <div className="h-panel-actions h-git-actions">
             {worktreesEndpoint && (
-              <select
-                className="h-git-worktree-filter"
-                value={worktree ?? ''}
-                onChange={(e) => setWorktree(e.target.value || null)}
-                title="filter commits by worktree"
-                aria-label="Filter commits by worktree"
-              >
-                <option value="">All worktrees{worktrees ? ` (${worktrees.length})` : ''}</option>
-                {worktrees?.map((w) => {
-                  const value = w.branch ?? (w.head ? `sha:${w.head}` : '');
-                  if (!value) return null;
-                  const optValue = w.branch ?? w.head;
-                  const label = (w.branch ?? `${w.head?.slice(0, 8)} (detached)`)
-                    + (w.isMain ? ' ★' : '')
-                    + (w.locked ? ' 🔒' : '')
-                    + (w.prunable ? ' ⚠' : '');
-                  return <option key={w.path} value={optValue}>{label}</option>;
-                })}
-              </select>
+              <GitSelect
+                triggerClassName="h-git-worktree-filter"
+                value={worktree ?? '_all'}
+                onChange={(v) => setWorktree(v === '_all' ? null : v)}
+                ariaLabel="Filter commits by worktree"
+                options={[
+                  { value: '_all', label: `All worktrees${worktrees ? ` (${worktrees.length})` : ''}` },
+                  ...(worktrees ?? []).flatMap((w) => {
+                    const optValue = w.branch ?? w.head;
+                    if (!optValue) return [];
+                    const label = (w.branch ?? `${w.head?.slice(0, 8)} (detached)`)
+                      + (w.isMain ? ' ★' : '')
+                      + (w.locked ? ' 🔒' : '')
+                      + (w.prunable ? ' ⚠' : '');
+                    return [{ value: optValue, label }];
+                  }),
+                ]}
+              />
             )}
-            <select
-              className="h-git-limit"
-              value={limit}
-              onChange={(e) => onLimitChange(Number(e.target.value))}
-              title="commit limit"
-              aria-label="Git commit limit"
-            >
-              {LIMITS.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-            <button
-              className="h-btn-icon"
-              onClick={() => setReloadTick((t) => t + 1)}
-              title="refresh git history"
-              aria-label="Refresh git history"
-            >
-              <RefreshCw size={12} />
-            </button>
+            <GitSelect
+              triggerClassName="h-git-limit"
+              value={String(limit)}
+              onChange={(v) => onLimitChange(Number(v))}
+              ariaLabel="Git commit limit"
+              options={LIMITS.map((n) => ({ value: String(n), label: String(n) }))}
+            />
+            <GitTooltip label="Refresh git history">
+              <button
+                className="h-btn-icon"
+                onClick={() => setReloadTick((t) => t + 1)}
+                aria-label="Refresh git history"
+              >
+                <RefreshCw size={12} />
+              </button>
+            </GitTooltip>
           </div>
         </div>
 

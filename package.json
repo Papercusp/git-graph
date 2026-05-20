@@ -14,7 +14,9 @@
   },
   "peerDependencies": {
     "react": "^18 || ^19",
-    "lucide-react": "*"
+    "lucide-react": "*",
+    "@radix-ui/react-select": "*",
+    "@radix-ui/react-tooltip": "*"
   },
   "scripts": {
     "test": "vitest run --passWithNoTests"
