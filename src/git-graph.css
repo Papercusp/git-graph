@@ -1,3 +1,5 @@
+@import 'react-diff-view/style/index.css';
+
 /* Harness-specific styles.
  * Builds on the global token system in apps/web/app/globals.css
  * (--bg, --fg, --good, --bad, --border, --dur-*, etc.) */
@@ -6054,6 +6056,15 @@
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
+.h-git-detail-drawer--inline {
+  max-width: none;
+  border-radius: 0;
+  border: none;
+  border-left: 1px solid color-mix(in oklab, var(--border), transparent 18%);
+  box-shadow: none;
+  background: var(--bg-popover);
+  height: 100%;
+}
 
 .h-git-detail-head {
   flex-shrink: 0;
@@ -6189,12 +6200,10 @@
 }
 .h-git-file-card {
   margin-bottom: 14px;
+  overflow: hidden;
   border: 1px solid color-mix(in oklab, var(--border), white 4%);
   border-radius: 10px;
-  background: var(--bg-2);
-}
-.h-git-file-card > div:not(.h-git-file-head) {
-  overflow-x: auto;
+  background: #07111c;
 }
 .h-git-file-head {
   display: flex;
@@ -6204,7 +6213,9 @@
   padding: 7px 10px;
   color: var(--fg);
   border-bottom: 1px solid color-mix(in oklab, var(--border), transparent 12%);
-  background: color-mix(in oklab, var(--bg-3), transparent 10%);
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-3), white 3%), color-mix(in oklab, var(--bg-3), transparent 12%)),
+    #0b1522;
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 11.5px;
 }
@@ -6226,15 +6237,112 @@
   cursor: pointer;
 }
 .h-git-file-head-button:hover {
-  background: color-mix(in oklab, var(--bg-3), transparent 0%);
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-3), white 6%), color-mix(in oklab, var(--bg-3), transparent 4%)),
+    #0d1a2a;
 }
 .h-git-file-stats {
   display: inline-flex;
+  align-items: center;
   flex: 0 0 auto;
   gap: 6px;
   margin-left: auto;
   font-size: 10.5px;
   font-weight: 700;
+}
+.h-git-file-kind,
+.h-git-file-note {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 7px;
+  border: 1px solid color-mix(in oklab, var(--border), white 4%);
+  border-radius: 999px;
+  color: var(--fg-dim);
+  background: color-mix(in oklab, var(--bg-3), transparent 20%);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.h-git-file-kind--modify { border-color: color-mix(in oklab, var(--accent), transparent 62%); color: color-mix(in oklab, var(--accent), white 34%); }
+.h-git-file-kind--add { border-color: color-mix(in oklab, var(--good), transparent 60%); color: color-mix(in oklab, var(--good), white 32%); }
+.h-git-file-kind--delete { border-color: color-mix(in oklab, var(--bad), transparent 58%); color: color-mix(in oklab, var(--bad), white 34%); }
+.h-git-file-kind--rename,
+.h-git-file-kind--copy { border-color: color-mix(in oklab, var(--warn, #d6a420), transparent 58%); color: color-mix(in oklab, var(--warn, #d6a420), white 32%); }
+.h-git-file-note {
+  flex: 0 0 auto;
+  margin-left: 2px;
+  color: var(--fg-dim);
+}
+.h-git-diff-table-wrap {
+  overflow: auto;
+  max-height: 560px;
+  background: #09111b;
+  --diff-background-color: transparent;
+  --diff-text-color: var(--fg);
+  --diff-font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --diff-selection-background-color: color-mix(in oklab, var(--accent), transparent 74%);
+  --diff-selection-text-color: #f8fbff;
+  --diff-gutter-insert-background-color: color-mix(in oklab, var(--good), transparent 78%);
+  --diff-gutter-insert-text-color: color-mix(in oklab, var(--good), white 34%);
+  --diff-gutter-delete-background-color: color-mix(in oklab, var(--bad), transparent 78%);
+  --diff-gutter-delete-text-color: color-mix(in oklab, var(--bad), white 34%);
+  --diff-gutter-selected-background-color: color-mix(in oklab, var(--bg-3), white 3%);
+  --diff-gutter-selected-text-color: var(--fg);
+  --diff-code-insert-background-color: color-mix(in oklab, var(--good), transparent 86%);
+  --diff-code-insert-text-color: var(--fg);
+  --diff-code-delete-background-color: color-mix(in oklab, var(--bad), transparent 86%);
+  --diff-code-delete-text-color: var(--fg);
+  --diff-code-insert-edit-background-color: color-mix(in oklab, var(--good), transparent 66%);
+  --diff-code-insert-edit-text-color: var(--fg);
+  --diff-code-delete-edit-background-color: color-mix(in oklab, var(--bad), transparent 66%);
+  --diff-code-delete-edit-text-color: var(--fg);
+  --diff-code-selected-background-color: color-mix(in oklab, var(--bg-3), white 3%);
+  --diff-code-selected-text-color: var(--fg);
+  --diff-omit-gutter-line-color: color-mix(in oklab, var(--accent), transparent 50%);
+}
+.h-git-diff-table {
+  min-width: 100%;
+}
+.h-git-diff-hunk + .h-git-diff-hunk {
+  border-top: 1px solid color-mix(in oklab, var(--border), transparent 35%);
+}
+.h-git-diff-line {
+  font-size: 11px;
+  line-height: 1.45;
+}
+.h-git-diff-gutter {
+  min-width: 5ch;
+  padding: 0 10px 0 8px;
+  color: var(--fg-dim);
+}
+.h-git-diff-code {
+  padding: 0 14px 0 12px;
+  white-space: pre;
+  word-break: normal;
+  word-wrap: normal;
+  overflow-wrap: normal;
+}
+.h-git-diff-warning,
+.h-git-raw-patch {
+  margin: 0;
+  padding: 10px 12px;
+  color: var(--fg);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.h-git-diff-warning {
+  color: color-mix(in oklab, var(--warn, #d6a420), white 30%);
+  border-bottom: 1px solid color-mix(in oklab, var(--warn, #d6a420), transparent 70%);
+  background: color-mix(in oklab, var(--warn, #d6a420), transparent 88%);
+}
+.h-git-raw-patch {
+  max-height: 560px;
+  overflow: auto;
+  white-space: pre;
+  background: #09111b;
 }
 .h-git-detail-toolbar {
   display: flex;

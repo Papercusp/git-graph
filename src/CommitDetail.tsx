@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Loader2, ChevronRight, ChevronDown } from 'lucide-react';
-import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued';
+import { Diff, Hunk, parseDiff, type FileData } from 'react-diff-view';
 import { GitTooltip } from './GitTooltip';
 
 interface CommitMeta {
@@ -20,44 +20,68 @@ interface CommitMeta {
 }
 
 interface HunkFile {
-  header: string;
   path: string;
-  before: string;
-  after: string;
-  /** True if this file's diff is too large to render through ReactDiffViewer. */
+  /** Parsed react-diff-view file data when the patch is small enough to render structurally. */
+  parsed: FileData | null;
+  /** Parsing failures fall back to the raw per-file patch instead of blanking the file. */
+  parseError: string | null;
+  /** True if this file's patch is too large to render through react-diff-view. */
   oversize: boolean;
-  /** Raw per-file patch slice — shown as <pre> when oversize. */
+  /** Raw per-file patch slice — shown as <pre> when oversize or unparseable. */
   rawPatch: string;
   added: number;
   removed: number;
 }
 
-/** Files smaller than this expand automatically; larger ones start collapsed. */
-const AUTO_EXPAND_BYTES = 8 * 1024;
-/** First N files always start expanded, regardless of size. */
-const AUTO_EXPAND_FIRST = 3;
 
-// Per-file size cap above which we skip ReactDiffViewer and render a <pre> block.
-// ReactDiffViewer constructs a row per line and diffs them; for huge generated files
-// (e.g. .harness/issues.json with 1700+ changed lines) it blocks the main thread.
-const PER_FILE_DIFF_LIMIT = 96 * 1024; // 96 KB of before/after content per file
+// Per-file raw patch size cap above which we skip react-diff-view and render a
+// <pre> block. Even parsed hunks can mean thousands of DOM rows for generated
+// files (e.g. .harness/issues.json with 1700+ changed lines).
+const PER_FILE_DIFF_LIMIT = 96 * 1024; // 96 KB raw patch per file
 
 // Hard ceiling on the number of files we'll attempt to render at all.
 const MAX_FILES_RENDERED = 200;
 
+function formatFilePath(oldPath: string, newPath: string): string {
+  if (!oldPath) return newPath;
+  if (!newPath || oldPath === newPath) return oldPath;
+  return `${oldPath} → ${newPath}`;
+}
+
+function toErrorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+function isDiffMetadataLine(line: string): boolean {
+  return (
+    line.startsWith('--- ') ||
+    line.startsWith('+++ ') ||
+    line.startsWith('index ') ||
+    line.startsWith('new file') ||
+    line.startsWith('deleted file') ||
+    line.startsWith('old mode') ||
+    line.startsWith('new mode') ||
+    line.startsWith('similarity index') ||
+    line.startsWith('rename ') ||
+    line.startsWith('copy ') ||
+    line.startsWith('Binary files ') ||
+    line.startsWith('GIT binary patch') ||
+    line.startsWith('literal ') ||
+    line.startsWith('delta ')
+  );
+}
+
 /**
- * O(n) unified-diff splitter. Pushes lines into per-file arrays and joins once
- * at the end — the previous version used `+=` string concatenation, which is
- * O(n²) and would lock the render thread on multi-MB patches.
+ * O(n) unified-diff splitter. It preserves a raw per-file patch for the
+ * oversize/unparseable fallback, while small files are parsed once for
+ * react-diff-view. The previous viewer rebuilt synthetic before/after files
+ * and then diffed those strings again in React, which duplicated work.
  */
 function splitDiff(patch: string): HunkFile[] {
   const files: HunkFile[] = [];
   const lines = patch.split('\n');
 
   let currentPath = '(file)';
-  let currentHeader = '';
-  let before: string[] = [];
-  let after: string[] = [];
   let raw: string[] = [];
   let added = 0;
   let removed = 0;
@@ -65,17 +89,23 @@ function splitDiff(patch: string): HunkFile[] {
 
   const flush = () => {
     if (!started) return;
-    const beforeStr = before.join('\n');
-    const afterStr = after.join('\n');
     const rawPatch = raw.join('\n');
-    const oversize =
-      beforeStr.length > PER_FILE_DIFF_LIMIT ||
-      afterStr.length > PER_FILE_DIFF_LIMIT;
+    const oversize = rawPatch.length > PER_FILE_DIFF_LIMIT;
+    let parsed: FileData | null = null;
+    let parseError: string | null = null;
+
+    if (!oversize && rawPatch.trim()) {
+      try {
+        parsed = parseDiff(rawPatch, { nearbySequences: 'zip' })[0] ?? null;
+      } catch (e) {
+        parseError = toErrorMessage(e);
+      }
+    }
+
     files.push({
-      header: currentHeader,
-      path: currentPath,
-      before: beforeStr,
-      after: afterStr,
+      path: parsed ? formatFilePath(parsed.oldPath, parsed.newPath) : currentPath,
+      parsed,
+      parseError,
       oversize,
       rawPatch,
       added,
@@ -86,11 +116,8 @@ function splitDiff(patch: string): HunkFile[] {
   for (const line of lines) {
     if (line.startsWith('diff --git ')) {
       flush();
-      const pathMatch = line.match(/ b\/(.+)$/);
-      currentHeader = line;
-      currentPath = pathMatch?.[1] ?? '(file)';
-      before = [];
-      after = [];
+      const pathMatch = line.match(/^diff --git a\/(.+) b\/(.+)$/);
+      currentPath = pathMatch?.[2] ?? pathMatch?.[1] ?? '(file)';
       raw = [line];
       added = 0;
       removed = 0;
@@ -100,26 +127,13 @@ function splitDiff(patch: string): HunkFile[] {
     if (!started) continue;
     raw.push(line);
 
-    if (line.startsWith('--- ') || line.startsWith('+++ ') || line.startsWith('index ') ||
-        line.startsWith('new file') || line.startsWith('deleted file') ||
-        line.startsWith('rename ') || line.startsWith('similarity index')) {
-      continue;
-    }
-    if (line.startsWith('@@')) {
-      if (before.length) before.push('');
-      if (after.length) after.push('');
+    if (line.startsWith('@@') || isDiffMetadataLine(line)) {
       continue;
     }
     if (line.startsWith('-')) {
-      before.push(line.slice(1));
       removed++;
     } else if (line.startsWith('+')) {
-      after.push(line.slice(1));
       added++;
-    } else if (line.startsWith(' ')) {
-      const body = line.slice(1);
-      before.push(body);
-      after.push(body);
     }
   }
   flush();
@@ -139,11 +153,52 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function DiffFileViewer({ file }: { file: FileData }) {
+  return (
+    <Diff
+      viewType="unified"
+      diffType={file.type}
+      hunks={file.hunks}
+      className="h-git-diff-table"
+      hunkClassName="h-git-diff-hunk"
+      lineClassName="h-git-diff-line"
+      gutterClassName="h-git-diff-gutter"
+      codeClassName="h-git-diff-code"
+      // react-diff-view ignores `lineClassName` unless this forwards the
+      // generated class string, so keep the passthrough for our 11px row style.
+      generateLineClassName={({ defaultGenerate }) => defaultGenerate()}
+    >
+      {(hunks) =>
+        hunks.map((hunk, hunkIndex) => (
+          <Hunk
+            key={`${file.newPath || file.oldPath}-${hunk.oldStart}-${hunk.newStart}-${hunkIndex}`}
+            hunk={hunk}
+          />
+        ))
+      }
+    </Diff>
+  );
+}
+
+function RawPatchFallback({ file }: { file: HunkFile }) {
+  return (
+    <>
+      {file.parseError ? (
+        <div className="h-git-diff-warning">
+          Couldn’t parse this file into structured hunks. Showing raw patch.
+        </div>
+      ) : null}
+      <pre className="h-git-raw-patch">{file.rawPatch}</pre>
+    </>
+  );
+}
+
 export function CommitDetail({
   sha,
   showCommitUrl,
   remoteCommitUrl,
   onClose,
+  inline,
 }: {
   sha: string;
   /** Function building the API URL for the commit detail (returns full diff/patch). */
@@ -151,6 +206,12 @@ export function CommitDetail({
   /** Optional builder for an external view URL (e.g. github.com/owner/repo/commit/SHA). */
   remoteCommitUrl?: (sha: string) => string;
   onClose: () => void;
+  /**
+   * When true, renders the drawer directly in the component tree instead of
+   * portaling to document.body. Use for two-pane layouts where the caller
+   * owns the containing box. The overlay backdrop is suppressed.
+   */
+  inline?: boolean;
 }) {
   const [meta, setMeta] = useState<CommitMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -160,9 +221,8 @@ export function CommitDetail({
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   // A commit whose every changed path is excluded by the server's default
   // diff filter (.harness/**, lockfiles, snapshots) comes back with an empty
-  // patch. "Show full diff" refetches with ?full=1. Stored as the sha it was
-  // enabled for, so navigating to a different commit auto-resets it without
-  // needing a separate effect.
+  // patch. Automatically retry once with ?full=1 instead of making the user
+  // click through a second "show diff" affordance.
   const [fullForSha, setFullForSha] = useState<string | null>(null);
   const full = fullForSha === sha;
 
@@ -225,11 +285,15 @@ export function CommitDetail({
     setExpanded({});
     // An empty patch is a real, common state: a merge/empty commit, or — the
     // usual case in harness repos — a commit whose every changed path is
-    // excluded by default (.harness/**, lockfiles, snapshots). The old guard
-    // `if (!meta?.patch) return` bailed *before* setFiles ran, so `files`
-    // stayed null and the modal hung on the loading state forever. Resolve
-    // to [] so the empty-state UI renders instead.
+    // excluded by default (.harness/**, lockfiles, snapshots). For non-merge
+    // commits, retry with `full=1` automatically so the diff surface shows the
+    // patch as soon as it is available instead of hiding it behind a button.
     if (!meta.patch) {
+      if (!full && meta.parents.length <= 1) {
+        setFiles(null);
+        setFullForSha(sha);
+        return;
+      }
       setFiles([]);
       return;
     }
@@ -238,19 +302,16 @@ export function CommitDetail({
       try {
         const parsed = splitDiff(meta.patch);
         setFiles(parsed);
-        const initial: Record<number, boolean> = {};
-        for (let i = 0; i < Math.min(parsed.length, MAX_FILES_RENDERED); i++) {
-          const f = parsed[i];
-          const small = f.before.length + f.after.length < AUTO_EXPAND_BYTES;
-          if (i < AUTO_EXPAND_FIRST || small) initial[i] = true;
-        }
+        const initial = Object.fromEntries(
+          parsed.slice(0, MAX_FILES_RENDERED).map((_, i) => [i, true]),
+        ) as Record<number, boolean>;
         setExpanded(initial);
       } catch (e) {
         setError(`diff parse failed: ${String(e)}`);
       }
     }, 0);
     return () => { clearTimeout(id); };
-  }, [meta]);
+  }, [full, meta, sha]);
 
   const toggleFile = useCallback((idx: number) => {
     setExpanded((prev) => ({ ...prev, [idx]: !prev[idx] }));
@@ -309,18 +370,12 @@ export function CommitDetail({
     }
   };
 
-  const overlay = (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="h-git-detail-overlay"
-      onClick={onClose}
+  const drawer = (
+    <section
+      className={`h-git-detail-drawer${inline ? ' h-git-detail-drawer--inline' : ''}`}
+      onClick={inline ? undefined : (e) => e.stopPropagation()}
+      aria-label="Commit diff"
     >
-      <section
-        className="h-git-detail-drawer"
-        onClick={(e) => e.stopPropagation()}
-        aria-label="Commit diff"
-      >
         <header className="h-git-detail-head">
           <div className="h-git-detail-id">
             <span>commit</span>
@@ -373,25 +428,7 @@ export function CommitDetail({
               <div className="h-git-detail-empty">
                 {meta.parents.length > 1
                   ? 'Merge commit — no combined diff to display.'
-                  : full
-                    ? 'Empty commit — no file changes.'
-                    : (
-                      <>
-                        <div>
-                          No diff to show — every path changed in this commit is
-                          excluded from the default view (.harness/**, lockfiles,
-                          snapshots, *.snap).
-                        </div>
-                        <button
-                          type="button"
-                          className="h-git-detail-copy"
-                          style={{ marginTop: 8 }}
-                          onClick={() => setFullForSha(sha)}
-                        >
-                          Show full diff
-                        </button>
-                      </>
-                    )}
+                  : 'Empty commit — no file changes.'}
               </div>
             )}
             {filesToShow.length > 0 && (
@@ -403,76 +440,45 @@ export function CommitDetail({
             {filesToShow.map((f, idx) => {
               const isOpen = !!expanded[idx];
               return (
-              <div key={`${f.path}:${idx}`} className="h-git-file-card">
-                <button
-                  type="button"
-                  className="h-git-file-head h-git-file-head-button"
-                  onClick={() => toggleFile(idx)}
-                  aria-expanded={isOpen}
-                >
-                  {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                  <span>{f.path}</span>
-                  <span className="h-git-file-stats">
-                    <span style={{ color: 'var(--good)' }}>+{f.added}</span>
-                    <span style={{ color: 'var(--bad)' }}>−{f.removed}</span>
-                  </span>
-                  {f.oversize && (
-                    <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--fg-dim)' }}>
-                      large — raw patch ({formatBytes(f.rawPatch.length)})
-                    </span>
-                  )}
-                </button>
-                {isOpen && (f.oversize ? (
-                  <pre
-                    style={{
-                      margin: 0,
-                      padding: '8px 10px',
-                      fontFamily: 'ui-monospace, SF Mono, Menlo, Consolas, monospace',
-                      fontSize: 11.5,
-                      lineHeight: 1.45,
-                      maxHeight: 480,
-                      overflow: 'auto',
-                      background: 'var(--bg-2)',
-                      color: 'var(--fg)',
-                      whiteSpace: 'pre',
-                    }}
+                <div key={`${f.path}:${idx}`} className="h-git-file-card">
+                  <button
+                    type="button"
+                    className="h-git-file-head h-git-file-head-button"
+                    onClick={() => toggleFile(idx)}
+                    aria-expanded={isOpen}
                   >
-                    {f.rawPatch}
-                  </pre>
-                ) : (
-                  <ReactDiffViewer
-                    oldValue={f.before}
-                    newValue={f.after}
-                    splitView={false}
-                    useDarkTheme
-                    compareMethod={DiffMethod.LINES}
-                    styles={{
-                      variables: {
-                        dark: {
-                          diffViewerBackground: 'var(--bg-2)',
-                          diffViewerColor: 'var(--fg)',
-                          addedBackground: 'color-mix(in oklab, var(--good), transparent 85%)',
-                          addedColor: 'var(--fg)',
-                          removedBackground: 'color-mix(in oklab, var(--bad), transparent 85%)',
-                          removedColor: 'var(--fg)',
-                          wordAddedBackground: 'color-mix(in oklab, var(--good), transparent 60%)',
-                          wordRemovedBackground: 'color-mix(in oklab, var(--bad), transparent 60%)',
-                          codeFoldBackground: 'var(--bg-3)',
-                          gutterBackground: 'var(--bg)',
-                          gutterColor: 'var(--fg-dim)',
-                          addedGutterBackground: 'color-mix(in oklab, var(--good), transparent 85%)',
-                          removedGutterBackground: 'color-mix(in oklab, var(--bad), transparent 85%)',
-                          emptyLineBackground: 'var(--bg-2)',
-                          diffViewerTitleColor: 'var(--fg)',
-                        },
-                      },
-                      contentText: { fontFamily: 'ui-monospace, SF Mono, Menlo, Consolas, monospace', fontSize: 11.5, lineHeight: '1.45' },
-                      line: { padding: '0 8px' },
-                      gutter: { padding: '0 6px', minWidth: 28 },
-                    }}
-                  />
-                ))}
-              </div>
+                    {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                    <span>{f.path}</span>
+                    <span className="h-git-file-stats">
+                      {f.parsed ? (
+                        <span className={`h-git-file-kind h-git-file-kind--${f.parsed.type}`}>
+                          {f.parsed.type}
+                        </span>
+                      ) : null}
+                      <span style={{ color: 'var(--good)' }}>+{f.added}</span>
+                      <span style={{ color: 'var(--bad)' }}>−{f.removed}</span>
+                    </span>
+                    {f.oversize ? (
+                      <span className="h-git-file-note">
+                        large — raw patch ({formatBytes(f.rawPatch.length)})
+                      </span>
+                    ) : null}
+                    {f.parseError ? (
+                      <span className="h-git-file-note" title={f.parseError}>
+                        raw patch
+                      </span>
+                    ) : null}
+                  </button>
+                  {isOpen ? (
+                    <div className="h-git-diff-table-wrap">
+                      {f.parsed && f.parsed.hunks.length ? (
+                        <DiffFileViewer file={f.parsed} />
+                      ) : (
+                        <RawPatchFallback file={f} />
+                      )}
+                    </div>
+                  ) : null}
+                </div>
               );
             })}
             {hiddenCount > 0 && (
@@ -483,14 +489,25 @@ export function CommitDetail({
           </div>
         )}
       </section>
-    </div>
   );
+
+  if (inline) return drawer;
 
   // Portal to <body> so the overlay's `position: fixed; inset: 0` is
   // viewport-relative. Ancestors of the git panel (resizable-panels,
   // animation wrappers) apply CSS transforms which establish a
   // containing block for fixed positioning — without the portal, the
   // overlay gets visually trapped inside the small git panel.
+  const overlay = (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="h-git-detail-overlay"
+      onClick={onClose}
+    >
+      {drawer}
+    </div>
+  );
   if (typeof document === 'undefined') return overlay;
   return createPortal(overlay, document.body);
 }

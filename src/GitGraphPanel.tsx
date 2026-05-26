@@ -232,6 +232,19 @@ export interface GitGraphPanelProps {
   worktree?: string | null;
   /** Optional change handler; pairs with `worktree` for controlled mode. */
   onWorktreeChange?: (next: string | null) => void;
+  /**
+   * Controlled selected commit SHA. When provided, the panel switches to
+   * controlled selection mode: the internal CommitDetail overlay is
+   * suppressed and the caller is responsible for rendering it. Pair with
+   * `onCommitSelect` to track changes.
+   */
+  selectedSha?: string | null;
+  /**
+   * Called when the user clicks a commit row (or the close action in the
+   * detail, passing null). Only fires in controlled mode (when `selectedSha`
+   * is passed).
+   */
+  onCommitSelect?: (sha: string | null) => void;
 }
 
 export default function GitGraphPanel({
@@ -244,20 +257,24 @@ export default function GitGraphPanel({
   worktreesUrl,
   worktree: worktreeControlled,
   onWorktreeChange,
+  selectedSha: selectedShaControlled,
+  onCommitSelect,
 }: GitGraphPanelProps) {
   const [limit, setLimit] = useState<number>(300);
   const [worktreeInternal, setWorktreeInternal] = useState<string | null>(null);
-  const isControlled = worktreeControlled !== undefined;
-  const worktree = isControlled ? (worktreeControlled ?? null) : worktreeInternal;
+  const isWorktreeControlled = worktreeControlled !== undefined;
+  const worktree = isWorktreeControlled ? (worktreeControlled ?? null) : worktreeInternal;
   const setWorktree = (next: string | null) => {
-    if (!isControlled) setWorktreeInternal(next);
+    if (!isWorktreeControlled) setWorktreeInternal(next);
     onWorktreeChange?.(next);
   };
   const [worktrees, setWorktrees] = useState<Worktree[] | null>(null);
   const [commits, setCommits] = useState<Commit[] | null>(() => getCachedGitLog(scope, 300, worktree));
   const [error, setError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
-  const [selectedSha, setSelectedSha] = useState<string | null>(null);
+  const isSelectionControlled = selectedShaControlled !== undefined;
+  const [selectedShaInternal, setSelectedShaInternal] = useState<string | null>(null);
+  const selectedSha = isSelectionControlled ? (selectedShaControlled ?? null) : selectedShaInternal;
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<GitFilter>('all');
   const [bookmarked, setBookmarked] = useState<Set<string>>(() => readBookmarks(scope));
@@ -350,8 +367,12 @@ export default function GitGraphPanel({
   };
 
   const selectCommit = useCallback((sha: string) => {
-    setSelectedSha(sha);
-  }, []);
+    if (isSelectionControlled) {
+      onCommitSelect?.(sha);
+    } else {
+      setSelectedShaInternal(sha);
+    }
+  }, [isSelectionControlled, onCommitSelect]);
 
   const applyQuery = useCallback((next: string) => {
     setQuery(next);
@@ -501,12 +522,12 @@ export default function GitGraphPanel({
         )}
       </div>
 
-      {selectedSha && (
+      {!isSelectionControlled && selectedSha && (
         <CommitDetail
           sha={selectedSha}
           showCommitUrl={showCommitUrl}
           remoteCommitUrl={remoteCommitUrl}
-          onClose={() => setSelectedSha(null)}
+          onClose={() => setSelectedShaInternal(null)}
         />
       )}
     </>
