@@ -1,5 +1,5 @@
 {
-  "name": "@restart/git-graph",
+  "name": "@papercusp/git-graph",
   "version": "0.0.1",
   "private": true,
   "description": "React components for rendering a git commit graph (commit list, commit detail, diff tooltips). Brand-value-free; styling injected by consumers via git-graph.css.",
