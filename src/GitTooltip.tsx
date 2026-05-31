@@ -1,7 +1,7 @@
 'use client';
 
 import * as RT from '@radix-ui/react-tooltip';
-import type { ReactNode } from 'react';
+import React, { type ReactNode } from 'react';
 
 /**
  * GitTooltip — local Radix Tooltip wrapper, mirrors

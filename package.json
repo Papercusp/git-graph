@@ -1,5 +1,5 @@
 {
-  "name": "@restart/git-graph",
+  "name": "@papercusp/git-graph",
   "version": "0.0.1",
   "private": true,
   "description": "React components for rendering a git commit graph (commit list, commit detail, diff tooltips). Brand-value-free; styling injected by consumers via git-graph.css.",
@@ -15,10 +15,10 @@
     "./git-graph.css": "./src/git-graph.css"
   },
   "peerDependencies": {
-    "react": "^18 || ^19",
-    "lucide-react": "*",
     "@radix-ui/react-select": "*",
-    "@radix-ui/react-tooltip": "*"
+    "@radix-ui/react-tooltip": "*",
+    "lucide-react": "*",
+    "react": "^18 || ^19"
   },
   "scripts": {
     "test": "vitest run --passWithNoTests"
@@ -26,5 +26,8 @@
   "devDependencies": {
     "@papercusp/test-config": "*",
     "vitest": "^4.1.4"
+  },
+  "dependencies": {
+    "react-diff-view": "^3.3.3"
   }
 }

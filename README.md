@@ -1,4 +1,4 @@
-# @restart/git-graph
+# @papercusp/git-graph
 
 A self-contained React component library for rendering git commit graphs:
 
@@ -11,8 +11,8 @@ A self-contained React component library for rendering git commit graphs:
 ## Usage
 
 ```ts
-import { GitGraphPanel } from '@restart/git-graph';
-import '@restart/git-graph/git-graph.css';
+import { GitGraphPanel } from '@papercusp/git-graph';
+import '@papercusp/git-graph/git-graph.css';
 
 <GitGraphPanel
   commits={commits}
