@@ -1,10 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { RefreshCw, Check, ChevronDown } from 'lucide-react';
 import * as RS from '@radix-ui/react-select';
 import { assignLanes, laneColor, type Commit, type LaidOutCommit } from './graphLayout';
-import { CommitDetail } from './CommitDetail';
+// Lazy: CommitDetail statically imports react-diff-view (~2.6MB). It only
+// renders when a commit is clicked, so defer that bundle until then instead of
+// pulling it in with the commit list (which mounts on every admin page).
+const CommitDetail = lazy(() => import('./CommitDetail').then((m) => ({ default: m.CommitDetail })));
 import { GitTooltip } from './GitTooltip';
 import { fetchGitLog, getCachedGitLog } from './cache';
 
@@ -523,12 +526,14 @@ export default function GitGraphPanel({
       </div>
 
       {!isSelectionControlled && selectedSha && (
-        <CommitDetail
-          sha={selectedSha}
-          showCommitUrl={showCommitUrl}
-          remoteCommitUrl={remoteCommitUrl}
-          onClose={() => setSelectedShaInternal(null)}
-        />
+        <Suspense fallback={null}>
+          <CommitDetail
+            sha={selectedSha}
+            showCommitUrl={showCommitUrl}
+            remoteCommitUrl={remoteCommitUrl}
+            onClose={() => setSelectedShaInternal(null)}
+          />
+        </Suspense>
       )}
     </>
   );
