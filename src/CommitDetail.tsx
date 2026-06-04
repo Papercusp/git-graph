@@ -36,7 +36,7 @@ interface HunkFile {
 
 // Per-file raw patch size cap above which we skip react-diff-view and render a
 // <pre> block. Even parsed hunks can mean thousands of DOM rows for generated
-// files (e.g. .harness/issues.json with 1700+ changed lines).
+// files (e.g. .papercusp/issues.json with 1700+ changed lines).
 const PER_FILE_DIFF_LIMIT = 96 * 1024; // 96 KB raw patch per file
 
 // Hard ceiling on the number of files we'll attempt to render at all.
@@ -220,7 +220,7 @@ export function CommitDetail({
   const [files, setFiles] = useState<HunkFile[] | null>(null);
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   // A commit whose every changed path is excluded by the server's default
-  // diff filter (.harness/**, lockfiles, snapshots) comes back with an empty
+  // diff filter (.papercusp/**, lockfiles, snapshots) comes back with an empty
   // patch. Automatically retry once with ?full=1 instead of making the user
   // click through a second "show diff" affordance.
   const [fullForSha, setFullForSha] = useState<string | null>(null);
@@ -285,7 +285,7 @@ export function CommitDetail({
     setExpanded({});
     // An empty patch is a real, common state: a merge/empty commit, or — the
     // usual case in harness repos — a commit whose every changed path is
-    // excluded by default (.harness/**, lockfiles, snapshots). For non-merge
+    // excluded by default (.papercusp/**, lockfiles, snapshots). For non-merge
     // commits, retry with `full=1` automatically so the diff surface shows the
     // patch as soon as it is available instead of hiding it behind a button.
     if (!meta.patch) {
