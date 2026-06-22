@@ -28,6 +28,7 @@
     "vitest": "^4.1.4"
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.13.23",
     "react-diff-view": "^3.3.3"
   }
 }

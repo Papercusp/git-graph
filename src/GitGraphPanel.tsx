@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { RefreshCw, Check, ChevronDown } from 'lucide-react';
 import * as RS from '@radix-ui/react-select';
 import { assignLanes, laneColor, type Commit, type LaidOutCommit } from './graphLayout';
@@ -361,6 +362,27 @@ export default function GitGraphPanel({
     .filter((commit) => filter !== 'bookmarked' || bookmarked.has(commit.sha))
     .filter((commit) => matchesCommit(commit, needle)), [bookmarked, filter, laidOut, needle]);
 
+  // Virtualize the commit list. The fetch limit goes up to 1000, so without
+  // windowing every row mounts as DOM. Only rows in (or near) the viewport
+  // render; bounded DOM cost regardless of limit. Rows are variable height
+  // (the optional refs row grows them), so heights are measured via the
+  // ResizeObserver-backed `measureElement` rather than a fixed estimate.
+  // `listRef` (the .h-git-list scroll container) stays the scroll element, so
+  // the scrollTo({ top: 0 }) calls on filter/limit change keep working.
+  const rowVirtualizer = useVirtualizer({
+    count: filteredCommits.length,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => 44,
+    overscan: 12,
+    getItemKey: (i) => filteredCommits[i]?.sha ?? i,
+  });
+
+  // Re-measure when the underlying data changes (filter/search/limit/refetch):
+  // row identities shift, so cached measurements must be invalidated.
+  useEffect(() => {
+    rowVirtualizer.measure();
+  }, [filteredCommits, rowVirtualizer]);
+
   const onLimitChange = (nextLimit: number) => {
     setLimit(nextLimit);
     listRef.current?.scrollTo({ top: 0 });
@@ -507,17 +529,29 @@ export default function GitGraphPanel({
             className="h-git-list"
             onWheel={(e) => e.stopPropagation()}
           >
-            {filteredCommits.map((commit) => (
-              <GitCommitRow
-                key={commit.sha}
-                commit={commit}
-                laneCount={laneCount}
-                active={selectedSha === commit.sha}
-                onSelect={selectCommit}
-                bookmarked={bookmarked.has(commit.sha)}
-                onBookmark={toggleBookmark}
-              />
-            ))}
+            <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
+              {rowVirtualizer.getVirtualItems().map((vi) => {
+                const commit = filteredCommits[vi.index];
+                if (!commit) return null;
+                return (
+                  <div
+                    key={commit.sha}
+                    data-index={vi.index}
+                    ref={rowVirtualizer.measureElement}
+                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${vi.start}px)` }}
+                  >
+                    <GitCommitRow
+                      commit={commit}
+                      laneCount={laneCount}
+                      active={selectedSha === commit.sha}
+                      onSelect={selectCommit}
+                      bookmarked={bookmarked.has(commit.sha)}
+                      onBookmark={toggleBookmark}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
