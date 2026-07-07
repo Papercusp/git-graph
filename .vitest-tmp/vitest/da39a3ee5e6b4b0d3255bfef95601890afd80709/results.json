@@ -1,1 +1,1 @@
-{"version":"4.1.8","results":[[":src/graphLayout.test.ts",{"duration":8.901621000000006,"failed":false}],[":src/CommitDetail.test.tsx",{"duration":211.83855500000004,"failed":false}],[":src/cache.test.ts",{"duration":8.094139000000041,"failed":false}]]}
+{"version":"4.1.8","results":[[":src/graphLayout.test.ts",{"duration":11.227686999999946,"failed":false}],[":src/CommitDetail.test.tsx",{"duration":408.6791720000001,"failed":false}],[":src/cache.test.ts",{"duration":22.99299199999996,"failed":false}]]}
