@@ -32,8 +32,8 @@ vi.mock('./GitTooltip', () => ({
 
 const BASE = {
   sha: 'c39d799c41aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-  author: 'Avi',
-  email: 'avi@storewolf.com',
+  author: 'Dev',
+  email: 'dev@example.com',
   ts: 1778800000000,
   parents: ['08844b6b7683c1e65539a497fe7ea7eebe945820'],
   subject: 'chunk: harness-only changes',
