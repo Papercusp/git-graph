@@ -4,13 +4,25 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { CommitDetail } from './CommitDetail';
 
 // Stub the heavy diff renderer — these tests exercise CommitDetail's
-// fetch/parse/empty-state state machine, not react-diff-viewer's output.
-vi.mock('react-diff-viewer-continued', () => ({
-  __esModule: true,
-  default: ({ oldValue, newValue }: { oldValue: string; newValue: string }) => (
-    <div data-testid="diff-viewer">{`-${oldValue.length} +${newValue.length}`}</div>
+// fetch/parse/empty-state state machine, not react-diff-view's output.
+vi.mock('react-diff-view', () => ({
+  Diff: ({ children }: { children: (hunks: unknown[]) => unknown }) => (
+    <div data-testid="diff-viewer">{children([])}</div>
   ),
-  DiffMethod: { LINES: 'LINES', WORDS: 'WORDS', CHARS: 'CHARS' },
+  Hunk: () => null,
+  parseDiff: (patch: string) => {
+    const lines = patch.split('\n');
+    const paths = lines.filter((l) => l.startsWith('diff --git')).map((l) => {
+      const m = l.match(/^diff --git a\/(.+) b\/(.+)$/);
+      return m?.[2] ?? m?.[1] ?? 'unknown';
+    });
+    return paths.map((path) => ({
+      type: 'modify',
+      oldPath: path,
+      newPath: path,
+      hunks: [{ oldStart: 1, newStart: 1, content: '' }], // At least one hunk to trigger DiffFileViewer
+    }));
+  },
 }));
 
 // GitTooltip wraps Radix Tooltip, which needs a TooltipProvider ancestor.
@@ -65,12 +77,12 @@ describe('CommitDetail — empty patch', () => {
 
     render(<CommitDetail sha={BASE.sha} showCommitUrl={showUrl} onClose={() => {}} />);
 
-    expect(await screen.findByText(/No diff to show/i)).toBeTruthy();
+    expect(await screen.findByText(/Empty commit/i)).toBeTruthy();
     expect(screen.queryByText(/parsing diff/i)).toBeNull();
     expect(screen.queryByText(/loading diff/i)).toBeNull();
   });
 
-  it('"Show full diff" refetches with ?full=1 and renders the recovered patch', async () => {
+  it('automatically refetches with ?full=1 when initial patch is empty', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ ...BASE, patch: '' }))
@@ -78,9 +90,6 @@ describe('CommitDetail — empty patch', () => {
     global.fetch = fetchMock as typeof fetch;
 
     render(<CommitDetail sha={BASE.sha} showCommitUrl={showUrl} onClose={() => {}} />);
-
-    const btn = await screen.findByRole('button', { name: /show full diff/i });
-    fireEvent.click(btn);
 
     expect(await screen.findByText('foo.ts')).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(2);
